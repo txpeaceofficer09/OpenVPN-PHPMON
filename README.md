@@ -2,7 +2,7 @@
 
 ## Download OpenVPN-PHPMON
 
-git clone https://github.com/txpeaceofficer09/openvpn-phpmon.git /var/www/html/
+git clone https://github.com/txpeaceofficer09/OpenVPN-PHPMON.git /var/www/html/
 
 ## Configuration
 
