@@ -12,14 +12,23 @@ if (isset($_REQUEST['logout'])) $_SESSION['password'] = NULL;
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 <style>
 
+html {
+	background-color: #cfb997;
+}
+
 body {
 	font-family: Verdana, Arial, Sans-Serif;
 	max-width: 80%;
-	margin: 20px auto;
+	margin: 0px auto;
+	border-style: solid;
+	border-width: 0px 1px 0px 1px;
+	border-color: #000;
+	background-color:  #fff;
 }
 
 table {
-	width: 100%;
+	width: 95%;
+	margin: 20px auto;
 }
 
 table, tr, td, th {
@@ -70,16 +79,17 @@ h1 button:hover {
 <?php
 
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
-	if ($_REQUEST['password'] != $password) die("<div align=\"center\">Login failed.</div>");
+	if ($_REQUEST['password'] != $password) die("<h1><img src=\"icons8-heart-monitor-96.png\" /> OpenVPN - PHP Monitor</h1><div align=\"center\">Login failed.</div><div align=\"center\"><form action=\"index.php\" method=\"POST\"><input type=\"password\" placeholder=\"Password\" name=\"password\" /> <input type=\"submit\" value=\"Login\" /></form></div>");
 	$_SESSION['password'] = $_REQUEST['password'];
 }
 
 if (empty($_SESSION['password']) || $_SESSION['password'] != $password) {
+	echo "<h1><img src=\"icons8-heart-monitor-96.png\" /> OpenVPN - PHP Monitor</h1>";
 	echo "<div align=\"center\"><form action=\"index.php\" method=\"POST\"><input type=\"password\" placeholder=\"Password\" name=\"password\" /> <input type=\"submit\" value=\"Login\" /></form></div>";
 	die();
 }
 
-echo "	<h1><button type=\"button\" onClick=\"top.location.href = '/index.php?logout';\">Log Out</button><img src=\"icons8-heart-monitor-96.png\" /> OpenVPN - PHP Monitor</h1>";
+echo "<h1><button type=\"button\" onClick=\"top.location.href = '/index.php?logout';\">Log Out</button><img src=\"icons8-heart-monitor-96.png\" /> OpenVPN - PHP Monitor</h1>";
 
 ?>
 

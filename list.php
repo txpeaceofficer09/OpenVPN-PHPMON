@@ -78,9 +78,9 @@ function checkTelnet($host, $port, $pass, $disconnect = '') {
 }
 
 if (!empty($_REQUEST['disconnect'])) {
-	$output = checkTelnet('127.0.0.1', 5555, $pass, $_REQUEST['disconnect']);
+	$output = checkTelnet('127.0.0.1', 5555, 'jam87421', $_REQUEST['disconnect']);
 } else {
-	$output = checkTelnet('127.0.0.1', 5555, $pass);
+	$output = checkTelnet('127.0.0.1', 5555, 'jam87421');
 }
 // echo $output;
 $file = explode("\r\n", $output);
