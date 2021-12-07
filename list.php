@@ -1,3 +1,4 @@
+
 <?php
 
 session_start();
@@ -89,11 +90,11 @@ $file = explode("\r\n", $output);
 $clients = [];
 
 for ($i=0;$i<count($file);$i++) {
-	if (preg_match('/^([a-z\-0-9]+),([0-9.:]+),([0-9]+),([0-9]+),([a-z\s:0-9]+)$/i', $file[$i], $matches)) {
+	if (preg_match('/^([a-z\-0-9]+),([a-f0-9.:]+),([0-9]+),([0-9]+),([a-z\s:0-9]+)$/i', $file[$i], $matches)) {
 		$clients[] = ['common-name'=>$matches[1], 'address'=>$matches[2], 'received'=>$matches[3], 'sent'=>$matches[4], 'connected'=>$matches[5]];
-	} elseif (preg_match('/^([0-9:.]+),([a-z\-.0-9]+),([0-9.:]+),([a-z\s:0-9]+)$/i', $file[$i], $matches)) {
+	} elseif (preg_match('/^([0-9:.]+),([a-z\-.0-9]+),([0-9a-f.:]+),([a-z\s:0-9]+)$/i', $file[$i], $matches)) {
 		updateClient($matches[3], $matches[1]);
-	} elseif (preg_match('/^([a-f0-9:.]+),([a-z\-.0-9]+),([0-9.:]+),([a-z\s:0-9]+)$/i', $file[$i], $matches)) {
+	} elseif (preg_match('/^([a-f0-9:.]+),([a-z\-.0-9]+),([0-9a-f.:]+),([a-z\s:0-9]+)$/i', $file[$i], $matches)) {
 		updateClient($matches[3], $matches[1]);
 	}
 }
