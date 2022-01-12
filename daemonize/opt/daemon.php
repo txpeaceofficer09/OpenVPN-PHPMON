@@ -1,30 +1,35 @@
 #!/usr/bin/env php
 <?php
 
-$host = '127.0.0.1'; // Host to connect to the management port on.
-$port = 5555; // Port the host is listening on for management traffic.
-$pass = 'PASSWORD'; // Password to connect to the OpenVPN management port.
-$email = 'someone@example.com'; // E-mail address to send alerts to.
-$from = 'no-reply@example.com'; // E-mail address to send the alerts from.
-$replyto = 'no-reply@example.com'; // E-mail address to reply to alerts.
-$headers = "From: $from\r\nReply-To: $replyto\r\nX-Mailer: PHP/".phpversion();
+// require_once('/var/www/openvpn/pass.inc.php');
+
+// Open connection to management port and keep it open and loop with a sleep(2) and keep getting status and parsing for data and putting it in MySQL.
+// Use this daemon to be able to send updates via e-mail when clients connect/disconnect.
+// Possibly look into making the do loop work while $socket is open.
+
+$pass = 'password'; // Password for the management interface of the OpenVPN server.
+$email = 'someone@example.com'; // E-Mail address we will send connect/disconnect messages to.
+
+$mysqli = new mysqli('localhost', 'openvpn', 'password', 'openvpn');
 
 function fixTimestamp($timestamp) {
 	return date('Y-m-d H:i:s', strtotime($timestamp));
 }
 
-function updateClient($public, $private) {
-	global $clients;
-	foreach ($clients AS $id=>$row) {
-		if ($row['address'] == $public) {
-			if (empty($clients[$id]['private'])) {
-				$clients[$id]['private'] = $private;
-				// break;
-			} else {
-				$clients[$id]['private'] .= ", $private";
-			}
-		}
+function getCIDfromAddr($public) {
+	global $mysqli;
+
+	return $mysqli->query("SELECT `id` FROM `connections` WHERE `public`='$public' LIMIT 1;")->fetch_object()->id;
+}
+
+function updateClient($cid, $private) {
+	global $mysqli;
+
+	$result = $mysqli->query("SELECT `ip` FROM `addr` WHERE `conn_id`=$cid LIMIT 1;");
+	if (!$result || $result->num_rows == 0) {
+		$mysqli->query("INSERT INTO `addr` (`conn_id`, `ip`) VALUES ($cid, '$private');");
 	}
+	$mysqli->query("UPDATE `connections` SET `connected`=1 WHERE `id`=$cid LIMIT 1;");
 }
 
 function readTo($stream, $prompt) {
@@ -43,38 +48,29 @@ function readTo($stream, $prompt) {
         return $buf;
 }
 
-function diff_recursive($array1, $array2) {
-	$difference = [];
+function createClient($name, $addr, $received, $sent, $date) {
+	global $mysqli;
+	global $email;
 
-	foreach ($array2 AS $key=>$value) {
-		$found =  false;
-		foreach ($array1 AS $k=>$v) {
-			if ($value['common-name'] == $v['common-name'] && $value['address'] == $v['address']) {
-				$found = true;
-				break;
-			}
+	$result = $mysqli->query("SELECT `connections`.`id` FROM `connections` LEFT JOIN `addr` ON `addr`.`conn_id`=`connections`.`id` WHERE `public`='$addr' LIMIT 1;");
+	if ($result && $result->num_rows == 1) {
+		mail($email, 'OpenVPN new client', "$name\t$addr\t".fixTimestamp($date), "From: OpenVPN<no-reply@trap-nine.com\r\nReply-To: OpenVPN<no-reply@trap-nine.com>\r\nX-Mailer: PHP/".phpversion());
+		$cid = $result->fetch_object()->id;
+		if ($mysqli->query("UPDATE `connections` SET `received`='$received', `sent`='$sent', `date`='".fixTimestamp($date)."', `connected`=1 WHERE `id`=$cid LIMIT 1;")) {
+			// echo "Updated $name\t$addr\t$received\t$sent\t$date\n";
+		} else {
+			// echo $mysqli->error."\n";
 		}
-		if ($found == false) $difference[] = $value;
+	} else {
+		$mysqli->query("INSERT INTO `connections` (`name`, `public`, `sent`, `received`, `connected`, `date`) VALUES ('$name', '$addr', '$sent', '$received', 1, '".fixTimestamp($date)."');");
+		$cid = $mysqli->insert_id;
+		$mysqli->query("INSERT INTO `log` (`conn_id`, `action`) VALUES ($cid, 'connect');");
 	}
 
-	return $difference;
+	return $cid;
 }
 
-function compareClients() {
-	global $clients;
-
-	$tbl = json_decode(join('', file('/opt/openvpn-phpmon/clients.json')), true);
-
-	$newClients = diff_recursive($clients, $tbl);
-	$lostClients = diff_recursive($tbl, $clients);
-
-	// Send e-mails for new clients.
-	if (count($newClients) > 0) mail($email, 'OpenVPN new client(s)', print_r($newClients, true), $headers);
-	// Send e-mails for disconnected clients.
-	if (count($lostClients) > 0) mail($email, 'OpenVPN disconnected client(s)', print_r($lostClients, true), $headers);
-}
-
-if ($socket=fsockopen($host, $port, $errno, $errstr, 5)) {
+if ($socket=fsockopen('127.0.0.1', 5555, $errno, $errstr, 5)) {
 	stream_set_blocking($socket, false);
 	fputs($socket, "\r\n");
 	readTo($socket, "PASSWORD:");
@@ -86,22 +82,34 @@ if ($socket=fsockopen($host, $port, $errno, $errstr, 5)) {
 		$file = explode("\r\n", $output);
 		$clients = [];
 		for ($i=0;$i<count($file);$i++) {
-			if (preg_match('/^([a-z\-0-9]+),([a-f0-9.:]+),([0-9]+),([0-9]+),([a-z\s:0-9]+)$/i', $file[$i], $matches)) {
-				$clients[] = ['common-name'=>$matches[1], 'address'=>$matches[2], 'received'=>$matches[3], 'sent'=>$matches[4], 'connected'=>fixTimestamp($matches[5])];
-			} elseif (preg_match('/^([0-9:.]+),([a-z\-.0-9]+),([0-9a-f.:]+),([a-z\s:0-9]+)$/i', $file[$i], $matches)) {
-				updateClient($matches[3], $matches[1]);
-			} elseif (preg_match('/^([a-f0-9:.]+),([a-z\-.0-9]+),([0-9a-f.:]+),([a-z\s:0-9]+)$/i', $file[$i], $matches)) {
-				updateClient($matches[3], $matches[1]);
+			$line = trim($file[$i]);
+			if (preg_match('/^([a-z\-0-9]+),([a-f0-9.:]+),([0-9]+),([0-9]+),([a-z\s:0-9]+)$/i', $line, $matches)) {
+				$clients[] = $matches[2];
+				$cid = createClient($matches[1], $matches[2], $matches[3], $matches[4], $matches[5]);
+			} elseif (preg_match('/^([0-9:.]+),([a-z\-.0-9]+),([0-9a-f.:]+),([a-z\s:0-9]+)$/i', $line, $matches)) {
+				$cid = getCIDfromAddr($matches[3]);
+				updateClient($cid, $matches[1]);
+			} elseif (preg_match('/^([a-f0-9:.]+),([a-z\-.0-9]+),([0-9a-f.:]+),([a-z\s:0-9]+)$/i', $line, $matches)) {
+				$cid = getCIDfromAddr($matches[3]);
+				updateClient($cid, $matches[1]);
+			}
+			// echo "$line\n";
+		}
+		$query = "SELECT * FROM `connections` WHERE `connected`=1 AND `public` NOT IN ('".join("', '", $clients)."');";
+		$result = $mysqli->query($query);
+		if ($result && $result->num_rows > 0) {
+			while ($row=$result->fetch_assoc()) {
+				mail($email, 'OpenVPN client disconnected', $row['name']."\t".$row['public'], "From: OpenVPN<no-reply@trap-nine.com\r\nReply-To: OpenVPN<no-reply@trap-nine.com>\r\nX-Mailer: PHP/".phpversion());
+				$mysqli->query("INSERT INTO `log` (`conn_id`, `action`) VALUES (".$row['id'].", 'disconnected');");
 			}
 		}
-		compareClients();
-		if ($fp=fopen('/opt/openvpn-phpmon/clients.json', 'w')) {
-			fputs($fp, json_encode($clients));
-			fclose($fp);
-		}
-		unset($clients);
-		sleep(2);
-	} while ($socket);
+		$mysqli->query("UPDATE `connections` SET `connected`=0 WHERE `connected`=1 AND `public` NOT IN ('".join("', '", $clients)."');");
+		unset($clients); // Empty the $clients array since we are done with it, so we don't end up with left over entries on the next loop iteration.
+		unset($cid); // Clear $cid since we don't need it anymore.
+		sleep(2); // Wait 2 seconds before processing the loop again.
+	} while ($socket); // Keep iterating the loop so long as our socket is still connected.
 }
+
+if (@$mysqli) @$mysqli->close(); // We are finished so close our connection to the database backend.
 
 ?>
