@@ -5,7 +5,6 @@
 
 // Open connection to management port and keep it open and loop with a sleep(2) and keep getting status and parsing for data and putting it in MySQL.
 // Use this daemon to be able to send updates via e-mail when clients connect/disconnect.
-// Possibly look into making the do loop work while $socket is open.
 
 $pass = 'password'; // Password for the management interface of the OpenVPN server.
 $email = 'someone@example.com'; // E-Mail address we will send connect/disconnect messages to.
