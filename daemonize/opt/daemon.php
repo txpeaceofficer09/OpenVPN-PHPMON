@@ -91,11 +91,6 @@ function createClient($name, $addr, $received, $sent, $date) {
 	$query = "SELECT `id` FROM `connections` WHERE `name`='$name' AND `date`='$date' LIMIT 1;";
 	$result = $mysqli->query($query);
 	if ($result && $result->num_rows == 1) {
-		if (mail(EMAIL, 'OpenVPN new client', "$name\t$addr\t".fixTimestamp($date), "From: OpenVPN<".FROM.">\r\nReply-To: OpenVPN<".FROM.">\r\nX-Mailer: PHP/".phpversion())) {
-			debug("Successfully sent connect e-mail for $name.");
-		} else {
-			debug("Failed to send connect e-mail for $name.");
-		}
 		$cid = $result->fetch_object()->id;
 		$query = "UPDATE `connections` SET `received`='$received', `sent`='$sent', `date`='$date', `connected`=1 WHERE `id`=$cid LIMIT 1;";
 		if ($mysqli->query($query)) {
@@ -112,6 +107,11 @@ function createClient($name, $addr, $received, $sent, $date) {
 			debug($query);
 			$cid = $mysqli->insert_id;
 			$mysqli->query("INSERT INTO `log` (`conn_id`, `action`) VALUES ($cid, 'connect');");
+			if (mail(EMAIL, 'OpenVPN new client', "$name\t$addr\t".fixTimestamp($date), "From: OpenVPN<".FROM.">\r\nReply-To: OpenVPN<".FROM.">\r\nX-Mailer: PHP/".phpversion())) {
+				debug("Successfully sent connect e-mail for $name.");
+			} else {
+				debug("Failed to send connect e-mail for $name.");
+			}
 		} else {
 			debug($query);
 			debug($mysqli->error);
