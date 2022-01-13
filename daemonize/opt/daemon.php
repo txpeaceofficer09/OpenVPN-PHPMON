@@ -19,6 +19,10 @@ define('MYSQL_DB', 'openvpn'); // MySQL database
 
 $mysqli = new mysqli(MYSQL_HOST, MYSQL_USER, MYSQL_PASS, MYSQL_DB); // Open a connection to MySQL to store our data.
 
+$mysqli->query("CREATE TABLE IF NOT EXISTS `log` ( `id` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY , `conn_id` INT(11) , `ip` VARCHAR(256) );");
+$mysqli->query("CREATE TABLE IF NOT EXISTS `connections` ( `id` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY , `name` VARCHAR(256) , `date` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP , `connected` TINYINT(1) , `sent` VARCHAR(32) , `received` VARCHAR(32) , `public` VARCHAR(256) );");
+$mysqli->query("CREATE TABLE IF NOT EXISTS `log` ( `id` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY , `conn_id` INT(11) , `action` VARCHAR(256) , `date` NOT NULL DEFAULT CURRENT_TIMESTAMP );");
+
 function getCIDfromNameDate($name, $date) {
 	$date = fixTimestamp($date);
 	$retVal = null;
