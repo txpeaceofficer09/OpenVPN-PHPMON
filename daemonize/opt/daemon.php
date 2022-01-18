@@ -132,53 +132,53 @@ if ($socket=fsockopen(HOST, PORT, $errno, $errstr, 5)) {
 		$output = readTo($socket, "END");
 		$file = explode("\r\n", $output);
 		$clients = [];
+		$skip_loop = false;
 		for ($i=0;$i<count($file);$i++) {
 			$line = trim($file[$i]);
-			if (preg_match('/^([a-z\-0-9]+),([a-f0-9.:]+),([0-9]+),([0-9]+),([a-z\s:0-9]+)$/i', $line, $matches)) {
+			if (substr($line, 0, 1) == '>') {
+				$skip_loop = true; // We have a client connecting/disconnecting during our loop and we don't want our results skewed so we'll skip this round.
+				break;
+			} elseif (preg_match('/^([\w\d\-_.]+),([\d.:]+),([\d]+),([\d]+),([\d\-\s:]+)$/i', $line, $matches)) {
 				$clients[] = $matches[2];
 				$cid = createClient($matches[1], $matches[2], $matches[3], $matches[4], $matches[5]);
 				debug(print_r($matches, true));
-			} elseif (preg_match('/^([0-9:.]+),([a-z\-.0-9]+),([0-9a-f.:]+),([a-z\s:0-9]+)$/i', $line, $matches)) {
+			} elseif (preg_match('/^([a-f\d.:]+),([\w\d:\-\s]+),([\d.:]+),([\d\-:\s]+)$/i', $line, $matches)) {
 				$cid = getCIDfromAddr($matches[3]);
 				updateClient($cid, $matches[1]);
 				debug(print_r($matches, true));
-			} elseif (preg_match('/^([a-f0-9:.]+),([a-z\-.0-9]+),([0-9a-f.:]+),([a-z\s:0-9]+)$/i', $line, $matches)) {
-				debug(print_r($matches, true));
-				$cid = getCIDfromAddr($matches[3]);
-				updateClient($cid, $matches[1]);
+			}
+			debug($line);
+		}
+		if ($skip_loop == false) {
+			$query = "SELECT * FROM `connections` WHERE `connected`=1 AND `public` NOT IN ('".join("', '", $clients)."');";
+			$result = $mysqli->query($query);
+			if ($result && $result->num_rows > 0) {
+				debug($query);
+				while ($row=$result->fetch_assoc()) {
+					if (mail(EMAIL, 'OpenVPN client disconnected', $row['name']."\t".$row['public'], "From: OpenVPN<".FROM.">\r\nReply-To: OpenVPN<".FROM.">\r\nX-Mailer: PHP/".phpversion())) {
+						debug("Successfully send disconnected e-mail for ".$row['name'].".");
+					} else {
+						debug("Failed to send disconnected e-mail for ".$row['name'].".");
+					}
+					$query = "INSERT INTO `log` (`conn_id`, `action`) VALUES (".$row['id'].", 'disconnected');";
+					if ($mysqli->query($query)) {
+						debug($query);
+					} else {
+						debug($query);
+						debug($mysqli->error);
+					}
+				}
 			} else {
-				debug($line);
+				debug($query);
+				debug($mysqli->error);
 			}
-			// debug($line);
-		}
-		$query = "SELECT * FROM `connections` WHERE `connected`=1 AND `public` NOT IN ('".join("', '", $clients)."');";
-		$result = $mysqli->query($query);
-		if ($result && $result->num_rows > 0) {
-			debug($query);
-			while ($row=$result->fetch_assoc()) {
-				if (mail(EMAIL, 'OpenVPN client disconnected', $row['name']."\t".$row['public'], "From: OpenVPN<".FROM.">\r\nReply-To: OpenVPN<".FROM.">\r\nX-Mailer: PHP/".phpversion())) {
-					debug("Successfully send disconnect e-mail for ".$row['name'].".");
-				} else {
-					debug("Failed to send disconnect e-mail for ".$row['name'].".");
-				}
-				$query = "INSERT INTO `log` (`conn_id`, `action`) VALUES (".$row['id'].", 'disconnected');";
-				if ($mysqli->query($query)) {
-					debug($query);
-				} else {
-					debug($query);
-					debug($mysqli->error);
-				}
+			$query = "UPDATE `connections` SET `connected`=0 WHERE `connected`=1 AND `public` NOT IN ('".join("', '", $clients)."');";
+			if ($mysqli->query($query)) {
+				debug($query);
+			} else {
+				debug($query);
+				debug($mysqli->error);
 			}
-		} else {
-			debug($query);
-			debug($mysqli->error);
-		}
-		$query = "UPDATE `connections` SET `connected`=0 WHERE `connected`=1 AND `public` NOT IN ('".join("', '", $clients)."');";
-		if ($mysqli->query($query)) {
-			debug($query);
-		} else {
-			debug($query);
-			debug($mysqli->error);
 		}
 		unset($clients); // Empty the $clients array since we are done with it, so we don't end up with left over entries on the next loop iteration.
 		unset($cid); // Clear $cid since we don't need it anymore.
